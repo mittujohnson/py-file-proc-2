@@ -1,0 +1,20 @@
+# .dockerignore
+
+# Python virtual environment
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+
+# Local environment files (we copy them explicitly in Dockerfile)
+# In a real-world scenario, you might not even copy .env files into an image
+# but instead provide them at runtime via volumes or a secrets manager.
+# .env
