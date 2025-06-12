@@ -1,38 +1,49 @@
 # Simple Python Docker App
 
-This is a simple Python application that runs in a Docker container. It demonstrates how to manage configurations for different environments (`dev`, `qa`, `prod`) using `.env` files.
+This application demonstrates a complete ETL (Extract, Transform, Load) workflow within a Docker container:
+1.  **Extract**: Connects to a PostgreSQL database and runs a query.
+2.  **Transform**: Saves the query results into a local CSV file.
+3.  **Load**: Uploads the generated CSV file to an S3-compatible bucket using `s3cmd`.
 
-The application is controlled by the `APP_ENV` environment variable. Based on this variable, it loads settings from the corresponding `.env.{APP_ENV}` file and prints them.
+The application is controlled by the `APP_ENV` environment variable (`dev`, `qa`, `prod`), which determines which `.env.{APP_ENV}` file to use for configuration.
 
 ## Configuration
-Configuration variables are stored in:
+Credentials and endpoints for PostgreSQL and S3 are stored in:
 - `.env.dev`
 - `.env.qa`
 - `.env.prod`
 
-Each file contains environment-specific settings like `LOG_LEVEL` and `API_ENDPOINT`.
+**IMPORTANT**: These files contain sensitive credentials. Ensure they are populated correctly and **never commit them to public version control**.
+
+### Production Security Note
+For production environments, it is strongly recommended to use a dedicated secrets management service (like AWS Secrets Manager, HashiCorp Vault, or Docker Secrets) instead of `.env` files. Secrets should be securely injected into the container at runtime.
 
 ## How to Run
 
-1.  **Build the Docker image:**
+1.  **Prerequisites**:
+    * Docker is installed.
+    * You have a running PostgreSQL database and an S3 bucket accessible with the credentials you provide.
+    * The `.env.*` files in the project root are filled with your credentials.
+
+2.  **Build the Docker image:**
     ```sh
     docker build -t simple-docker-app .
     ```
 
-2.  **Run the container for a specific environment:**
+3.  **Run the ETL process for a specific environment:**
     Use the `-e` flag to set the `APP_ENV` variable.
 
-    * **Development (default):**
+    * **Development:**
         ```sh
-        docker run --rm simple-docker-app "Running dev tests..."
+        docker run --rm -e APP_ENV=dev simple-docker-app
         ```
 
     * **QA:**
         ```sh
-        docker run --rm -e APP_ENV=qa simple-docker-app "Executing QA validation..."
+        docker run --rm -e APP_ENV=qa simple-docker-app
         ```
 
     * **Production:**
         ```sh
-        docker run --rm -e APP_ENV=prod simple-docker-app "Processing production data."
+        docker run --rm -e APP_ENV=prod simple-docker-app
         ```
