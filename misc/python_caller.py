@@ -21,6 +21,8 @@ def call_program_sequentially(program_path, parameter, interval_seconds, exit_va
             print(f"Calling {program_path} with parameter: {parameter}")
             
             # Use subprocess.run to execute the program and capture its output
+            # The 'subprocess.run' function is a blocking call.
+            # The script will pause here and wait for the program to finish.
             result = subprocess.run(
                 ['python', program_path, parameter], 
                 check=True, 
