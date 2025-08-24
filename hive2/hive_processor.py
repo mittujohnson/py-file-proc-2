@@ -46,24 +46,17 @@ def run_shell_command(command, step_name):
         print(f"Command failed with exit code {e.returncode}")
         print(f"Stdout: {e.stdout}")
         print(f"Stderr: {e.stderr}")
-        raise Exception(f"Shell command failed at step: {step_name}")
+        raise Exception(f"Shell command failed at step: {e.step_name}")
 
 def get_latest_partition_date(cursor):
     """
     Finds the latest partition date in the final output table.
     """
-    # This query must be idempotent and must not fail on first run if table is empty.
+    # SQL queries are now loaded from the runner.sql file
+    queries = load_sql_queries('runner.sql')
+
     # We create the table before querying it to ensure it exists.
-    create_output_table_query = """
-    CREATE TABLE IF NOT EXISTS final_processed_sales (
-        transaction_id STRING,
-        sale_amount DOUBLE,
-        product_name STRING,
-        category STRING
-    )
-    PARTITIONED BY (sale_date DATE)
-    STORED AS PARQUET;
-    """
+    create_output_table_query = queries['create_final_table'].strip()
     execute_hive_query(cursor, create_output_table_query, "Create Final Output Table (if not exists)")
 
     query = "SELECT MAX(sale_date) FROM final_processed_sales"
@@ -83,38 +76,40 @@ def process_single_day(cursor, target_date):
     date_str = target_date.strftime('%Y-%m-%d')
     print(f"\n--- Processing data for date: {date_str} ---")
 
+    queries = load_sql_queries('runner.sql')
+
     # Step 1: Use distcp to copy data from S3 to HDFS for the specific date
     s3_source_path_daily = f"{S3_BASE_PATH}{date_str}/"
     hdfs_destination_path_daily = f"{HDFS_BASE_PATH}{date_str}/"
     distcp_command = f"hadoop distcp {s3_source_path_daily} {hdfs_destination_path_daily}"
     run_shell_command(distcp_command, f"Copy Data for {date_str}")
 
-    # Step 2: Define the first query: Create the temporary table (CTAS)
-    create_temp_table_query = f"""
-    CREATE TEMPORARY TABLE temp_filtered_sales AS
-    SELECT
-        transaction_id,
-        product_id,
-        sale_amount
-    FROM sales_data
-    WHERE
-        region = 'North America' AND sale_date = '{date_str}'
-    """
+    # Step 2: Create the temporary table (CTAS)
+    create_temp_table_query = queries['create_temp_table'].strip().format(date_str=date_str)
     execute_hive_query(cursor, create_temp_table_query, f"Create Temporary Table for {date_str}")
 
     # Step 3: Enable dynamic partitioning and insert data
     execute_hive_query(cursor, "SET hive.exec.dynamic.partition=true", "Enable Dynamic Partitioning")
     execute_hive_query(cursor, "SET hive.exec.dynamic.partition.mode=nonstrict", "Set Dynamic Partition Mode")
 
-    insert_output_table_query = f"""
-    INSERT OVERWRITE TABLE final_processed_sales PARTITION(sale_date='{date_str}')
-    SELECT
-        t1.transaction_id,
-        t1.sale_amount,
-        t2.product_name,
-        t2.category
-    FROM temp_filtered_sales t1
-    JOIN product_info t2 ON t1.product_id = t2.product_id
-    """
+    insert_output_table_query = queries['insert_output_table'].strip().format(date_str=date_str)
     execute_hive_query(cursor, insert_output_table_query, f"Insert data into partitioned table for {date_str}")
 
+def load_sql_queries(file_path):
+    """
+    Loads SQL queries from a file, labeled with comments.
+    """
+    queries = {}
+    with open(file_path, 'r') as f:
+        content = f.read()
+    
+    # Split the file by the labeled comments
+    blocks = content.split('-- @label:')
+    for block in blocks:
+        if block.strip():
+            lines = block.strip().split('\n', 1)
+            label = lines[0].strip()
+            query = lines[1].strip() if len(lines) > 1 else ''
+            queries[label] = query
+            
+    return queries
