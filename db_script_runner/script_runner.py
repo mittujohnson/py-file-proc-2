@@ -155,6 +155,9 @@ def run_script(db_type, script_file):
             import psycopg2
             conn = psycopg2.connect(**db_config_params)
             cursor = conn.cursor()
+        except psycopg2.UniqueViolation:
+            print(f"Error: Unique constraint violation in PostgreSQL database '{db_type}'.")
+            return
         except ImportError:
             print("Error: PostgreSQL library 'psycopg2' not found. Please install it (pip install psycopg2-binary).")
             return
