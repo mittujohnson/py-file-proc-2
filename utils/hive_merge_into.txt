@@ -1,0 +1,61 @@
+Recommended Process: Staging-and-Overwrite Upsert
+This method involves three main steps to logically merge the data:
+
+Filter/Identify: Separate the data in the Stage Table into two sets: Updates (matching keys) and Inserts (non-matching keys).
+
+Combine: Combine the Current Data (excluding the rows being updated) with the Updates and the Inserts.
+
+Replace: Overwrite the entire contents of the External Target Table with the combined, merged data set.
+
+Step 1: Create a Deduplicated Merge Table
+Create a temporary table that holds the final, complete, and correct set of data. This table will contain all the rows from the target, but with the updated rows replaced by the new data from the stage table.
+
+Let's assume:
+
+Target Table: your_external_target_table
+
+Stage Table: stage_table
+
+Common Key: id
+
+SQL
+
+-- DDL for the temporary merge table (schema must match the target)
+CREATE TABLE temp_merge_result LIKE your_external_target_table
+STORED AS ORC; -- Use the same storage format as your target table
+Step 2: Perform the Logic (Combine Old Data + New Data)
+The core logic uses a LEFT ANTI JOIN to exclude the updated rows from the target and then combines the remaining old data with the new stage data using a UNION ALL.
+
+SQL
+
+INSERT OVERWRITE TABLE temp_merge_result
+AS
+SELECT *
+FROM stage_table -- 1. Start with ALL new data from the stage table
+UNION ALL
+SELECT T.*
+FROM your_external_target_table T -- 2. Add only the records from the target table
+LEFT ANTI JOIN stage_table S       -- ...that DO NOT have a matching key (ID)
+  ON T.id = S.id;                  -- ...in the stage table (i.e., the rows NOT being updated).
+Explanation of the Logic:
+
+SELECT * FROM stage_table: This selects all new records. For records that are updates, the new, correct value is selected. For records that are new inserts, the entire record is selected.
+
+LEFT ANTI JOIN: This is the crucial part. It filters the original target table (T) to only keep the rows whose id does not exist in the stage_table (S). This removes the old versions of the records that are being updated by the stage table.
+
+UNION ALL: Combines the two sets, resulting in a complete set of data: the unmodified old rows + the updated rows (new version) + the newly inserted rows.
+
+Step 3: Overwrite the External Target Table
+The final step is to overwrite the physical data files of your External Target Table with the clean, merged data from the temporary table.
+
+SQL
+
+INSERT OVERWRITE TABLE your_external_target_table
+SELECT * FROM temp_merge_result;
+Step 4: Cleanup
+Drop the temporary table to free up resources.
+
+SQL
+
+DROP TABLE temp_merge_result;
+This multi-step approach achieves the same end result as a single MERGE INTO statement without requiring any ACID or transactional features.
