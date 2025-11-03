@@ -1,0 +1,49 @@
+.
+├── app
+│   └── main_script.sh  <-- Your script in the 'app' folder
+└── library
+    └── functions.sh    <-- The script with the function definition
+
+
+---------
+
+#!/bin/bash
+
+# functions.sh content in the 'library' folder
+
+my_utility_function() {
+  echo "--- Executing utility function from library/functions.sh ---"
+  echo "Hello, $1! This function is being called from another script."
+  echo "------------------------------------------------------------"
+}
+
+# No main execution logic here, so it only defines the function
+
+-----------
+
+#!/bin/bash
+
+# main_script.sh content in the 'app' folder
+
+# Use 'source' or '.' with the correct relative path to the function file.
+# Since app/ is a sibling of library/, we go up one directory (..)
+# and then into the library/ folder.
+source ../library/functions.sh
+
+# Now, you can call the function as if it were defined in this script
+echo "Starting main script execution..."
+
+# Call the function defined in the separate script
+my_utility_function "User"
+
+echo "Finished main script execution."
+
+-----------------
+
+chmod +x app/main_script.sh library/functions.sh
+
+---------
+
+./app/main_script.sh
+
+-------------
